@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title></title>
+    <meta http-equiv="Content-Type" content="text/html;charset=UTF-8" />
+    <link rel="stylesheet/less" type="text/css" href="./options.less" />
+    <script src="../js/libs/jquery-1.9.1.min.js"></script>
+    <script src="../js/libs/less.min.js"></script>
+  </head>
+  <body class="awt-ziwo-ce">
+    <div class="azc-title">Authentication</div>
+    <div class="azc-configuration">
+
+      <div class="azc-configuration-ziwo">
+        <form class="azc-form">
+          <div class="azc-form-field">
+            <div class="azc-form-field-label">Ziwo API Domain:</div>
+            <div class="azc-form-field-error"></div>
+            <div class="azc-form-field-value">
+              <input type="text" name="Ziwo[api.hostname]" placeholder="your-app-api.aswat.co" />
+            </div>
+          </div>
+          <div class="azc-form-field">
+            <div class="azc-form-field-label">Zendesk Connection Type:</div>
+            <div class="azc-form-field-error"></div>
+            <div class="azc-form-field-value">
+              <select class="azc-section-selector" name="Ziwo.Auth[type]" size="1">
+                <option value="" selected>(choose)</option>
+                <option value="session">Session</option>
+                <option value="user-password">User/Password</option>
+              </select>
+            </div>
+          </div>
+          <div class="azc-section-condition"
+               x-section-selector="Ziwo.Auth[type]"
+               x-section-when="session">
+            <div class="azc-form-field">
+              <div class="azc-form-field-label">Ziwo Session Token:</div>
+              <div class="azc-form-field-error"></div>
+              <div class="azc-form-field-value">
+                <input type="text" readonly name="Ziwo.Auth[session.token]" />
+              </div>
+            </div>
+            <div class="azc-form-button">
+              <button type="button" disabled>Save</button>
+            </div>
+          </div>
+          <div class="azc-section-condition"
+               x-section-selector="Ziwo.Auth[type]"
+               x-section-when="user-password">
+            <div class="azc-form-field">
+              <div class="azc-form-field-label">Ziwo Agent Username:</div>
+              <div class="azc-form-field-error"></div>
+              <div class="azc-form-field-value">
+                <input type="text" name="Ziwo.Agent[username]" placeholder="0123" />
+              </div>
+            </div>
+            <div class="azc-form-field">
+              <div class="azc-form-field-label">Ziwo Agent Password:</div>
+              <div class="azc-form-field-error"></div>
+              <div class="azc-form-field-value">
+                <input type="password" name="Ziwo.Agent[password]" placeholder="Password"/>
+              </div>
+            </div>
+            <div class="azc-form-button">
+              <button type="button" disabled>Save</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="azc-configuration-helpdesk">
+        <form class="azc-form">
+          <div class="azc-form-field">
+            <div class="azc-form-field-label">Helpdesk Type:</div>
+            <div class="azc-form-field-error"></div>
+            <div class="azc-form-field-value">
+              <select class="azc-section-selector" name="Helpdesk[type]" size="1">
+                <option value="" selected>(choose)</option>
+                <option value="zendesk">Zendesk</option>
+                <option value="freshdesk">Freshdesk</option>
+                <option value="freshsales">Freshsales</option>
+              </select>
+            </div>
+          </div>
+          <div class="azc-section-condition"
+               x-section-selector="Helpdesk[type]"
+               x-section-when="zendesk">
+            <div class="azc-form-field">
+              <div class="azc-form-field-label">Zendesk API Domain:</div>
+              <div class="azc-form-field-error"></div>
+              <div class="azc-form-field-value">
+                <input type="text" name="Zendesk[api.hostname]" placeholder="company.zendesk.com" />
+              </div>
+            </div>
+            <div class="azc-form-field">
+              <div class="azc-form-field-label">Zendesk Connection Type:</div>
+              <div class="azc-form-field-error"></div>
+              <div class="azc-form-field-value">
+                <select class="azc-section-selector" name="Zendesk.Auth[type]" size="1">
+                  <option value="" selected>(choose)</option>
+                  <option value="session">Session</option>
+                  <option value="agent-user-password">Agent User/Password</option>
+                </select>
+              </div>
+            </div>
+            <div class="azc-section-condition"
+                 x-section-selector="Zendesk.Auth[type]"
+                 x-section-when="session">
+              <div class="azc-form-field">
+                <div class="azc-form-field-label">Zendesk Session Token:</div>
+                <div class="azc-form-field-error"></div>
+                <div class="azc-form-field-value">
+                  <input type="text" readonly name="Zendesk.Auth[session.token]" />
+                </div>
+              </div>
+              <div class="azc-form-button">
+                <button type="button" disabled>Save</button>
+              </div>
+            </div>
+            <div class="azc-section-condition"
+                 x-section-selector="Zendesk.Auth[type]"
+                 x-section-when="agent-user-password">
+              <div class="azc-form-field">
+                <div class="azc-form-field-label">Zendesk Agent Username:</div>
+                <div class="azc-form-field-error"></div>
+                <div class="azc-form-field-value">
+                  <input type="text" name="Zendesk.Agent[username]" placeholder="0123" />
+                </div>
+              </div>
+              <div class="azc-form-field">
+                <div class="azc-form-field-label">Zendesk Agent Password:</div>
+                <div class="azc-form-field-error"></div>
+                <div class="azc-form-field-value">
+                  <input type="password" name="Zendesk.Agent[password]" placeholder="Password" />
+                </div>
+              </div>
+              <div class="azc-form-button">
+                <button type="button" disabled>Save</button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+    </div>
+    <script src="./options.js"></script>
+  </body>
+</html>
