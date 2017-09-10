@@ -13,13 +13,13 @@
       this.send('.Auth:-set', { prop: 'session.token', value: authToken });
     };
 
-    this.publishApiOrigin = function () {
+    this.publishApiHostname = function () {
       var hostname = window.location.hostname.replace('.aswat.co', '-api.aswat.co');
       this.send(':-setnx', { prop: 'api.hostname', value: hostname });
     };
 
   };
 
-  Runtime.publishApiOrigin();
+  Runtime.publishApiHostname();
   Runtime.publishAuthToken();
 })();

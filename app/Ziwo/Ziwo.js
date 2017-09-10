@@ -2,7 +2,6 @@
 export default function (node, logger) {
 
   node.set('domain', 'aswat.co');
-  node.set('bootstrap.file', 'js/inject-ziwo.js');
 
   node.set('emitter', new EventEmitter());
 

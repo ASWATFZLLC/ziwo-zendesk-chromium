@@ -1,110 +1,56 @@
-var YCE = new function () {
+const catchError = function (error) { if (error) console.error(error); };
 
-  var Util = new function () {
+const Hive = Yolo.create(chrome.runtime.getURL('/'));
 
-    this.createLocalStorageDB = function (prefix) {
-      return new function () {
+Hive.build('Log', catchError);
 
-        this.set = function (key, value, callback) {
-          if (callback == null) callback = function () {};
-          var oldData = localStorage.getItem(key);
-          if (oldData != null) {
-            var oldValue = JSON.parse(oldData).value;
-            if (Yolo.Digest(oldValue) == Yolo.Digest(value))
-              return callback(null, false);
-          }
-          var data = JSON.stringify({ value: value });
-          localStorage.setItem([prefix, key].join('.'), data);
-          return callback(null, true);
-        };
+Hive.build('Ziwo', catchError);
+Hive.build('Ziwo.Agent', catchError);
+Hive.build('Ziwo.Auth', catchError);
+Hive.build('Ziwo.Channel', catchError);
+Hive.build('Ziwo.Session', catchError);
 
-        this.get = function (key) {
-          if (callback == null) callback = function () {};
-          var data = localStorage.getItem([prefix, key].join('.'));
-          if (data == null) return callback(null, null);
-          var value = JSON.parse(data).value;
-          return callback(null, value);
-        };
+Hive.build('Helpdesk', catchError);
 
-      };
-    };
+Hive.build('Zendesk', catchError);
+Hive.build('Zendesk.Auth', catchError);
+Hive.build('Zendesk.Session', catchError);
 
-  };
+const ziwoEE = Hive.getChild('Ziwo').get('emitter');
 
-  var Ziwo = this.Ziwo = new function () {
-
-    this.events = new EventEmitter();
-    this.SDK = require('libs/sdk/ziwo.js');
-    this.SDK.setDB(Util.createLocalStorageDB('ziwo'));
-    this.SDK.setEventEmitter(this.events);
-
-    this.isThisUrlContext = function (url) {
-      return /\.aswat\.co$/.test(new URL(url).hostname);
-    };
-
-    this.receiveMessage = function (message) {
-      switch (message.type) {
-      case 'event': return Ziwo.events.emit(message.key, message.value);
-      default: console.log('Discard', message);
-      }
-    };
-
-  };
-
-  var Helpdesk = this.Helpdesk = new function () {
-
-    this.Node = new Yolo.Node('Helpdesk');
-
-  };
-
-  var Zendesk = this.Zendesk = new function () {
-
-    this.SDK = require('libs/sdk/zendesk.js');
-
-  };
-
-  debugger;
-  /*
-  this.Root = new Yolo.Node('YCE');
-  this.Root.attach(Ziwo.SDK.Node, 'Ziwo');
-  this.Root.attach(Helpdesk.Node, 'Helpdesk');
-  this.Root.attach(Zendesk.SDK.Node, 'Zendesk');
-  */
-};
-
-YCE.Ziwo.events.on('auth-token', function (token) {
-  YCE.Ziwo.SDK.Node.send('Auth:set-token', token);
-});
-
-YCE.Ziwo.events.on('auth-disconnected', function () {
-  alert('You have been disconnect from Ziwo');
-});
-
-YCE.Ziwo.events.on('api-origin', function (token) {
-  YCE.Ziwo.SDK.Node.send(':set-api-origin', token);
-});
-
-YCE.Ziwo.events.on('live-call', function (message) {
-  console.log('LIVE CALL', message);
-});
-
+ziwoEE.on('live-calls', Yolo.Util.debounce(function (calls) {
+  for (var i = 0; i < calls.length; i++) {
+    var call = calls[i];
+    var caller = /^0+$/.test(call.callerID) ? call.callerPosition : call.callerID;
+    var callId = call.callID;
+    Hive.send('Helpdesk:display-end-user', { identity: caller });
+  }
+}, 200));
 
 chrome.runtime.onMessage.addListener(function (message, sender, callback) {
   if (sender.id != chrome.runtime.id) return ;
-  for (var ctx in YCE) {
-    if (typeof YCE[ctx].isThisUrlContext != 'function') continue ;
-    if (typeof YCE[ctx].receiveMessage != 'function') continue ;
-    YCE[ctx].receiveMessage(JSON.parse(message));
-    break ;
-  }
+  const hostname = new URL(sender.url).hostname;
+  const domain = hostname.split('.').slice(-2).join('.');
+  const data = JSON.parse(message);
+  Hive.getChildren().map(function (Node) {
+    const nodeDomain = Node.get('domain');
+    if (nodeDomain == null || nodeDomain != domain) return ;
+    Node.send(data.fqn, data.flow, callback);
+  });
 });
 
-chrome.tabs.getAllInWindow(null, function (tabs) {
-  for (var i = 0; i < tabs.length; i++) {
-    var tab = tabs[i];
-    if (YCE.Ziwo.isThisUrlContext(tab.url)) {
-      chrome.tabs.executeScript(tab.id, { file: 'js/inject-ziwo.js' });
-    }
-  }
+chrome.windows.getAll({ populate: true }, function (windows) {
+  windows.forEach(function (window) {
+    window.tabs.forEach(function (tab) {
+      const hostname = new URL(tab.url).hostname;
+      const domain = hostname.split('.').slice(-2).join('.');
+      Hive.getChildren().map(function (Node) {
+        const nodeDomain = Node.get('domain');
+        if (nodeDomain == null || nodeDomain != domain) return ;
+        const Session = Node.getChild('Session');
+        if (Session == null) return ;
+        Session.send(':connect', tab.id);
+      });
+    });
+  });
 });
-
