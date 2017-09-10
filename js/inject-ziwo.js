@@ -2,17 +2,20 @@
 
   var Runtime = new function () {
 
-    this.publishAuthToken = function () {
-      var authToken = localStorage.getItem('x-auth-token');
-      if (authToken == null) return ;
-      var message = { type: 'event', key: 'auth-token', value: authToken };
+    this.send = function (fqn, flow) {
+      var message = { fqn: fqn, flow: flow };
       chrome.runtime.sendMessage(JSON.stringify(message));
     };
 
+    this.publishAuthToken = function () {
+      var authToken = localStorage.getItem('x-auth-token');
+      if (authToken == null) return ;
+      this.send('.Auth:-set', { prop: 'session.token', value: authToken });
+    };
+
     this.publishApiOrigin = function () {
-      var origin = window.location.origin.replace('.aswat.co', '-api.aswat.co');
-      var message = { type: 'event', key: 'api-origin', value: origin };
-      chrome.runtime.sendMessage(JSON.stringify(message));
+      var hostname = window.location.hostname.replace('.aswat.co', '-api.aswat.co');
+      this.send(':-setnx', { prop: 'api.hostname', value: hostname });
     };
 
   };

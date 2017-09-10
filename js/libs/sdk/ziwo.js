@@ -35,7 +35,6 @@ module.exports = new function () {
     
   });
 
-
   var Channel = Ziwo.getChild('Channel');
   Channel.set('events.live.queue', 'GET /live/queues');
   Channel.set('events.live.position', 'GET /live/positions');
