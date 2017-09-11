@@ -20,16 +20,16 @@ export default function (node, logger) {
 
   node.on('connect')
     .assert(function () { return this.node.get('uplink') == null; }, '=:ALREADY_CONNECTED')
-    .then('Ziwo.Auth:get-token').merge({ token: '$:@' })
+    .then('Ziwo.Auth:get-token', {}).merge({ token: '$:@' })
+    .then('Ziwo:get-api-origin', {}).merge('origin')
     .assert('$:token', 'authentication token not found')
-    .then(function ({ token }, callback) {
+    .then(function ({ origin, token }, callback) {
       const Ziwo = this.node.parent;
-      const endpoint = (Ziwo.get('api.protocol') || 'https') + '://' + Ziwo.get('api.hostname');
       const params = { query: 'access_token=' + encodeURIComponent(token), path: '/socket'
                      , reconnectionDelay: 1000
                      };
       if (this.node.get('uplink') != null) return callback('An uplink already exists');
-      const uplink = io.connect(endpoint, params);
+      const uplink = io.connect(origin, params);
       uplink.on('error', error => {
         if (error == 'Invalid access token')
           this.node.send('Ziwo:-emit', { event: 'disconnected', data: error });

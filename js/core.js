@@ -23,34 +23,10 @@ ziwoEE.on('live-calls', Yolo.Util.debounce(function (calls) {
     var call = calls[i];
     var caller = /^0+$/.test(call.callerID) ? call.callerPosition : call.callerID;
     var callId = call.callID;
+    console.log('Incoming call', caller, callId);
     Hive.send('Helpdesk:display-end-user', { identity: caller });
   }
 }, 200));
 
-chrome.runtime.onMessage.addListener(function (message, sender, callback) {
-  if (sender.id != chrome.runtime.id) return ;
-  const hostname = new URL(sender.url).hostname;
-  const domain = hostname.split('.').slice(-2).join('.');
-  const data = JSON.parse(message);
-  Hive.getChildren().map(function (Node) {
-    const nodeDomain = Node.get('domain');
-    if (nodeDomain == null || nodeDomain != domain) return ;
-    Node.send(data.fqn, data.flow, callback);
-  });
-});
-
-chrome.windows.getAll({ populate: true }, function (windows) {
-  windows.forEach(function (window) {
-    window.tabs.forEach(function (tab) {
-      const hostname = new URL(tab.url).hostname;
-      const domain = hostname.split('.').slice(-2).join('.');
-      Hive.getChildren().map(function (Node) {
-        const nodeDomain = Node.get('domain');
-        if (nodeDomain == null || nodeDomain != domain) return ;
-        const Session = Node.getChild('Session');
-        if (Session == null) return ;
-        Session.send(':connect', tab.id);
-      });
-    });
-  });
-});
+Hive.send('Ziwo.Session:bootstrap');
+Hive.send('Zendesk.Session:bootstrap');

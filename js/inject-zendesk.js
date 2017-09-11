@@ -1,37 +1,34 @@
 Runtime = new function () {
   var Runtime = this;
+  var authenticity_token = null;
 
   this.send = function (fqn, flow) {
     var message = { fqn: fqn, flow: flow };
     chrome.runtime.sendMessage(JSON.stringify(message));
   };
 
-  this.getAuthToken = (function () {
-    var authenticity_token = null;
-    (function wait(count) {
-      if (count == 5) return Runtime.send('Log:alert', 'Please reload Zendesk page');
-      if (document.head == null) return setTimeout(wait, 1, count + 1);
-      var token = document.head.querySelector('meta[name="csrf-token"]').content;
-      authenticity_token = token;
-      return Runtime.send('.Auth:-set', { prop: 'session.token', value: token });
-    })(0);
-    return function () { return authenticity_token; };
-  })();
+  this.getAuthToken = function () {
+    return authenticity_token;
+  };
 
   this.publishAuthToken = function () {
     var token = this.getAuthToken();
-    return this.send('.Auth:-set', { prop: 'session.token', value: token });
+    return this.send('Zendesk.Auth:set-auth-token', { token });
   };
 
-  this.publishApiHostname = function () {
-    var hostname = window.location.hostname;
-    this.send(':-set', { prop: 'api.hostname', value: hostname });
-  };
+  (function fetch_authenticity_token(count) {
+    if (count == 5) return Runtime.send('Log:error', 'No Zendesk session available');
+    if (document.head == null) return setTimeout(fetch_authenticity_token, 1, count + 1);
+    var meta = document.head.querySelector('meta[name="csrf-token"]');
+    if (meta == null) return Runtime.send('Log:error', 'No Zendesk session available');
+    var token = meta.content;
+    authenticity_token = token;
+    Runtime.publishAuthToken();
+  })(0);
 
 };
 
-Runtime.publishApiHostname();
-Runtime.publishAuthToken();
+Runtime.send(':connect');
 
 /******************/
 

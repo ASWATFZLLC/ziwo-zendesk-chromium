@@ -31,12 +31,20 @@ export default function (node, logger) {
     return true;
   });
 
+  node.on('get-session-token')
+    .then('Ziwo.Session:execute', { arg: null, fn: { __: function (data, callback) {
+      var authToken = localStorage.getItem('x-auth-token');
+      if (authToken == null) return callback('Not connected');
+      else return callback(null, authToken);
+    } } })
+    .end();
+
   node.on('get-token', function (data, callback) {
     var type = this.node.get('type');
     if (type == 'session') {
       var token = this.node.get('session.token');
       if (token != null) return callback(null, token);
-      else return callback('No session available');
+      else return this.node.send(':get-session-token', null, callback);
     } else if (type == 'agent-user-password') {
       var username = this.node.get('agent.username');
       var password = this.node.get('agent.password');

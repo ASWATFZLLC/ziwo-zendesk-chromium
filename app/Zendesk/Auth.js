@@ -9,9 +9,8 @@ export default function (node, logger) {
   node.field('type', 'Primitive.String');
   node.field('session.token', 'Primitive.String');
 
-  node.on('-set', function (flow) {
-    this.node.set(flow.prop, flow.value);
-    return true;
+  node.on('set-auth-token', function ({ token }) {
+    this.node.set('session.token', token);
   });
 
 };

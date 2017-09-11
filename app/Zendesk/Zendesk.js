@@ -1,8 +1,10 @@
 /*!UroxGvT3uDMQCT1va20i43ZZSxo*/
 export default function (node, logger) {
 
-  node.set('domain', 'zendesk.com');
-  node.set('bootstrap.file', 'js/inject-zendesk.js');
+  node.on('-set', function (flow) {
+    this.node.set(flow.prop, flow.value);
+    return true;
+  });
 
   node.on('display-end-user')
     .then('.Session:execute', { arg: '$:@', fn: { __: function (userId, callback) {

@@ -1,16 +1,14 @@
 /*!UroxGvT3uDMQCT1va20i43ZZSxo*/
 export default function (node, logger) {
 
-  node.set('domain', 'aswat.co');
+  node.inherit('LocalStorage.Record');
+  node.set('storage.prefix', 'ziwo.base');
 
   node.set('emitter', new EventEmitter());
 
-  node.on('-setnx', function (flow) {
-    var old = this.node.get(flow.prop);
-    if (old != null) return false;
-    this.node.set(flow.prop, flow.value);
-    return true;
-  });
+  node.set('api.protocol', 'https');
+
+  node.field('api.hostname', 'Primitive.String');
 
   node.on('-emit', function (message) {
     var event = message.event;
@@ -18,5 +16,21 @@ export default function (node, logger) {
     this.node.get('emitter').emit(event, data);
     return message;
   });
+
+  node.on('get-api-origin')
+    .Match('#:api.hostname')
+    .  WhenType('String')
+    .    as('$:@').merge('hostname')
+    .  Otherwise()
+    .    then(':pull', { api: { hostname: {} } }).dismiss()
+    .    Match('#:api.hostname')
+    .      WhenEquiv(null)
+    .        then('.Session:get-api-hostname').merge('hostname')
+    .      Otherwise()
+    .        as('#:api.hostname').merge('hostname')
+    .      end()
+    .  end()
+    .as('%:#{api.protocol}://${hostname}')
+    .end()
 
 };
