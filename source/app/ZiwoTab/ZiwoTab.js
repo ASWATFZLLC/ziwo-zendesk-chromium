@@ -4,7 +4,12 @@ var ZiwoTab = function ZiwoTab(es, id) {
   this.auth      = null;
   this.agent     = null;
   this._waitFor  = new CallbackHandler(60000);
-  es.link('ZiwoTab', this.id, this, { prefix: 'On' });
+  this._subs     = [];
+  this._subs.push(es.link('ZiwoTab', this.id, this, { prefix: 'On' }));
+};
+
+ZiwoTab.prototype.destroy = function () {
+  this._es.unsubscribe(this._subs);
 };
 
 ZiwoTab.prototype.trigger = function (method, params, callback) {

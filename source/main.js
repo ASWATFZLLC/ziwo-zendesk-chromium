@@ -42,3 +42,12 @@ chrome.tabs.onRemoved.addListener(function (id, info) {
   var streamId = categoryName + '-' + id;
   return es.publish(streamId, 'TabClosed');
 });
+
+chrome.tabs.onReplaced.addListener(function (id, info) {
+  var categoryName = tabsCategoryNames[id];
+  if (categoryName == null) return ;
+  delete tabsCategoryNames[id];
+  var streamId = categoryName + '-' + id;
+  return es.publish(streamId, 'TabClosed');
+});
+

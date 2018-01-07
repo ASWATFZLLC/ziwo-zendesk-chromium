@@ -8,6 +8,7 @@ document.head.appendChild(function (script) {
 var ZendeskAdapter = function ZendeskTab(window) {
   this.window       = window;
   this.api_origin   = this.window.location.origin + '/api/v2';
+  this.agentId      = null;
   this.initiate();
   if (this.isLogged())
     this.publish('LoggedTabAppend', { auth: this.getAuthToken() });
@@ -53,28 +54,39 @@ ZendeskAdapter.prototype.displayUser = function (userId) {
   document.body.removeChild(a);
 };
 
-/*
-ZendeskAdapter.prototype.search = function (identity, callback) {
-  return this.request('get', '/api/v2/search.json?query=' + identity, null, callback);
+ZendeskAdapter.prototype.createTicket = function (ticket, callback) {
+  return this.request('post', '/tickets', { ticket: ticket }, callback);
 };
 
-ZendeskAdapter.prototype.setAsPrimary = function () {
+ZendeskAdapter.prototype.addPhoneCallRecord = function (customerId, ziwoOrigin, callId, callback) {
+  var htmlBody = ['ziwo-phone-call-record', ziwoOrigin, callId].join(':');
+  var ticket = { status: 'solved', tags: ['ziwo-call-record'], subject: 'Ziwo phone call record' };
+  ticket.submitter_id = this.agentId || customerId;
+  ticket.requester_id = customerId;
+  ticket.comment = { html_body: htmlBody, 'public': false, author_id: this.agentId || customerId };
+  return this.createTicket(ticket, callback);
+};
+
+ZendeskAdapter.prototype.setAsPrimary = function self() {
   const button = document.querySelector('#ziwo-main-button');
-  if (button == null) return setTimeout(self, 1000, _, callback);
+  if (button == null) return setTimeout(self, 1000);
   button.markPrimary();
 };
 
-ZendeskAdapter.prototype.unsetAsPrimary = function () {
+ZendeskAdapter.prototype.unsetAsPrimary = function self() {
   const button = document.querySelector('#ziwo-main-button');
-  if (button == null) return setTimeout(self, 1000, _, callback);
-  button.markPrimary();
+  if (button == null) return setTimeout(self, 1000);
+  button.unmarkPrimary();
 };
-*/
 
 /**********************************/
 
 ZendeskAdapter.prototype.OnLoggedTabAppend = function (event) {
-  
+  var _this = this;
+  return this.request('get', '/users/me', function (err, result) {
+    if (err) return console.error(err);
+    _this.agentId = result.user.id;
+  });
 };
 
 /**********************************/
@@ -171,7 +183,7 @@ PhoneNumber.prototype.toString = function () {
         if (this.isPrimary) {
           // Already Primary
         } else {
-          adapter.setAsPrimary();
+          adapter.publish('RequestPrimary', {});
         }
       };
       logo.unmarkPrimary = function () {
@@ -198,7 +210,7 @@ PhoneNumber.prototype.toString = function () {
   document.addEventListener('DOMNodeInserted'         , debounce(handleDomChange, 250), true);
 
   var isPhoneNumber = /(^|\s)((((\+|(00))[1-9]\d{0,3}[\s\-.]?)?\d{2,4}[\s\/\-.]?)|21)\d{5,9}(\s|$)/;
-  var isPhoneRecord = /^ziwo-phone-call-record:(.+):([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})$/;
+  var isPhoneRecord = /^ziwo-phone-call-record:(.+):([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})(?:\.mp3)?$/;
   var notraverseTags = { script: true, style: true };
 
   function handleDomChange () {
@@ -231,9 +243,10 @@ PhoneNumber.prototype.toString = function () {
   }
 
   function addPhoneCallRecordPlayer(dom, match) {
-    var src = match[1] + '/surveillance/recordings/' + match[2] + '.mp3';
+    var src = 'https://' + match[1] + '/surveillance/recordings/' + match[2] + '.mp3';
     var audio = document.createElement('audio');
     audio.src = src;
+    audio.controls = true;
     dom.parentNode.insertBefore(audio, dom);
     dom.parentNode.removeChild(dom);
     var event = new Event('audiojs-wrap');

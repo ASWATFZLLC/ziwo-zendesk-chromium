@@ -4,6 +4,7 @@ var ZiwoAdapter = function ZiwoTab(window) {
   this.credentials  = null;
   this.api_hostname = window.location.hostname.replace('.aswat.co', '-api.aswat.co');
   this.api_origin   = '//' + this.api_hostname;
+  this.lastCallerId = null;
   this.initiate();
   if (this.isLogged())
     this.publish('LoggedTabAppend', { auth: this.getAuthToken() });
@@ -32,55 +33,20 @@ ZiwoAdapter.prototype.request = function (method, path, data, callback) {
   return jQuery.ajax(payload);
 };
 
-ZiwoAdapter.prototype.getAgentCredentials = function () {
-  var _this = this;
-  this.request('get', '/profile', function (err, data) {
-    if (err) return console.error(err);
-    var credentials = {};
-    credentials.login = data.content.ccLogin;
-    credentials.password = data.content.ccPassword;
-    _this.publish('AgentCredentialsFetched', credentials);
-  });
-}
-
-ZiwoAdapter.prototype.ConnectPbx = function (credentials) {
-  var _this = this;
-  var options = {};
-  options.socketUrl = 'wss:' + _this.api_origin + ':8082';
-  options.onmessage = function (event) {
-    var data = JSON.parse(event.data);
-    var method = data.method;
-    var payload = data.params;
-    _this.PbxHandleCommand(method, payload);
-  };
-  options.onopen = function (event) {
-    _this.publish('PbxWsConnected', { url: event.currentTarget.url });
-  };
-  options.onclose = function () {
-    _this.publish('PbxWsDisconnected', {});
-  };
-  var handle = new $.JsonRpcClient(options);
-  var payload    = {};
-  payload.login  = 'agent-' + credentials.login + '@' + _this.api_hostname;
-  payload.passwd = CryptoJS.MD5([credentials.login, credentials.password].join('')).toString();
-  payload.loginParams   = {};
-  payload.userVariables = {};
-  handle.call('login', payload, function (event) {
-    _this.rpcClient = handle;
-    _this.publish('PbxWsLoggedIn', { sessid: event.sessid });
-  }, function () {
-    console.log(event);
-    _this.publish('PbxWsConnectionFailed');
-  });
-};
-
 ZiwoAdapter.prototype.PbxHandleCommand = function (method, data) {
   switch (method) {
   case 'verto.invite':
-    this.publish('PbxWsCallIncame', { id: data.callID, caller: data.caller_id_number });
+    this.lastCallerId = data.caller_id_number;
+    if (data.caller_id_number == null || data.caller_id_number.length <= 4) break ;
+    this.publish('PbxWsCallIncame', { caller: data.caller_id_number });
     break ;
   case 'verto.bye':
-    this.publish('PbxWsCallEnded', { id: data.callID });
+    var origin = this.api_hostname;
+    var caller = this.lastCallerId;
+    var callId = data.callID || data.dialogParams.callID;
+    if (data.cause == 'ORIGINATOR_CANCEL') break ;
+    if (caller == null || caller.length <= 4) break ;
+    this.publish('PbxWsCallEnded', { origin: origin, caller: caller, callId: callId });
     break ;
   default:
     this.publish('PbxWsUnhandledEvent', { method: method, data: data });
@@ -110,30 +76,78 @@ ZiwoAdapter.prototype.HangUp = function (number) {
 
 /**********************************/
 
+/* Utilisation de la main web socket pour eviter les lose_race, ce qui empechait d'avoir les cdr ... */
 ZiwoAdapter.prototype.OnLoggedTabAppend = function (event) {
-  this.getAgentCredentials();
-};
-
-ZiwoAdapter.prototype.OnAgentCredentialsFetched = function (event) {
-  this.credentials = event.data;
-  this.ConnectPbx(event.data);
-};
-
-ZiwoAdapter.prototype.OnPbxWsLoggedIn = function (event) {
-  this.rpcClient.options.sessid = event.data.sessid;
+  var mime = { type: 'application/javascript' }
+  var blob = new Blob
+  ( [ '(' + function self() {
+        if (typeof $ == 'undefined' || typeof $.verto == 'undefined' || $.verto.saved.length < 1)
+          return setTimeout(self, 1000);
+        var fn = $.verto.saved[0].rpcClient.options.onmessage;
+        if (fn.bridged) return setTimeout(self, 1000);
+        $.verto.saved[0].rpcClient.options.onmessage = function (event) {
+          try {
+            var domEv = new CustomEvent('message', { detail: JSON.stringify(event) });
+            document.getElementById('ChromeExtensionZiwoBridge').dispatchEvent(domEv);
+          } catch (e) {}
+          return fn.apply(this, arguments);
+        };
+        $.verto.saved[0].rpcClient.options.onmessage.bridged = true;
+        return setTimeout(self, 1000);
+      } + ')();'
+    , '(' + function self() {
+        if (typeof $ == 'undefined' || typeof $.verto == 'undefined' || $.verto.saved.length < 1)
+          return setTimeout(self, 1000);
+        var fn = $.verto.saved[0].rpcClient.call;
+        if (fn.bridged) return setTimeout(self, 1000);
+          $.verto.saved[0].rpcClient.call = function (method, payload) {
+          try {
+            var event = { method: method, payload: payload };
+            var domEv = new CustomEvent('message', { detail: JSON.stringify(event) });
+            document.getElementById('ChromeExtensionZiwoBridge').dispatchEvent(domEv);
+          } catch (e) {}
+          return fn.apply(this, arguments);
+        };
+        $.verto.saved[0].rpcClient.call.bridged = true;
+        return setTimeout(self, 1000);
+      } + ')();'
+    ]
+  , mime);
   var _this = this;
-  this.rpcClient.heartbeat = setInterval(function () {
-    _this.rpcClient.expired = true;
-    _this.rpcClient._wsSocket.close();
-  }, 3600000);
+  var url = window.URL.createObjectURL(blob);
+  var script = document.createElement('script');
+  script.id = 'ChromeExtensionZiwoBridge';
+  script.addEventListener('message', function (domEvent) {
+    var event = JSON.parse(domEvent.detail);
+    if (event.method && event.payload) {
+      console.log('SEND', event.method, event.payload);
+      _this.PbxHandleCommand(event.method, event.payload);
+    } else if (event.eventData) {
+      console.log('RECEIVE', event.eventData.method, event.eventData.params);
+      _this.PbxHandleCommand(event.eventData.method, event.eventData.params);
+    }
+  }, true);
+  setTimeout(function () {
+    window.document.body.appendChild(script);
+    script.src = url;
+  }, 10000);
 };
 
-ZiwoAdapter.prototype.OnPbxWsDisconnected = function (event) {
+ZiwoAdapter.prototype.OnPbxWsCallEnded = function (event) {
   var _this = this;
-  if (this.rpcClient && this.rpcClient.heartbeat) clearInterval(this.rpcClient.heartbeat);
-  var delay = _this.rpcClient.expired ? 1 : 5000;
-  _this.rpcClient.expired = false;
-  setTimeout(function () { _this.ConnectPbx(_this.credentials); }, delay);
+  setTimeout(function () {
+    _this.request('get', '/agents/channels/calls?fetchStart=0&fetchStop=6', function (err, history) {
+      if (err) return console.error(err);
+      for (var i = 0; i < history.content.length; i++) {
+        if (history.content[i].recordingFile == null) continue ;
+        if (history.content[i].hangupCause != 'NORMAL_CLEARING') break ;
+        if (event.data.caller != history.content[i].callerIDNumber) break ;
+        var payload = event.data;
+        payload.fileId = history.content[i].recordingFile;
+        _this.publish('PhoneCallRecorded', payload);
+      }
+    });
+  }, 1000);
 };
 
 /**********************************/

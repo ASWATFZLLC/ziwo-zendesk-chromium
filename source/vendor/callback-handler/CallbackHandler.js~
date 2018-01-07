@@ -1,7 +1,0 @@
-var CallbackHandler = function () {
-
-};
-
-CallbackHandler.prototype.addListener = function () {
-
-};

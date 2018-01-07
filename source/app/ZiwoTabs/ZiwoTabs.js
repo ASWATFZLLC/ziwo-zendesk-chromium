@@ -11,6 +11,7 @@ ZiwoTabs.prototype.OnLoggedTabAppend = function (state, event) {
 };
 
 ZiwoTabs.prototype.OnTabClosed = function (state, event) {
+  state.tabs[event.identityId].destroy();
   delete state.tabs[event.identityId];
   return state;
 };

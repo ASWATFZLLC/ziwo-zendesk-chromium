@@ -94,7 +94,7 @@ EventStore.prototype.subscribe = function (streamId, mapping, options, onSubscri
     : mapping.$init != null ? mapping.$init
     : function () { return null; };
   var state = $init();
-  var subscription = { mapping: mapping, options: options, state: state };
+  var subscription = { id: subscriptionId, mapping: mapping, options: options, state: state };
   this.subscriptions[streamId].push(subscription);
   if (onSubscribed) onSubscribed();
   return subscriptionId;
@@ -120,10 +120,21 @@ EventStore.prototype.onGC = function (categoryName, predicate) {
   }, options);
 };
 
-EventStore.prototype.releaseSubscriptions = function (streamId) {
-  var subscriptions = this.subscriptions[streamId];
-  if (subscriptions == null) return ;
-  alert('TODO');
+EventStore.prototype.unsubscribe = function (ids) {
+  if (typeof ids == 'string') ids = [ids];
+  for (var stream in this.subscriptions) {
+    var newStream = [];
+    for (var i = 0; i < this.subscriptions[stream].length; ) {
+      var hasRemoved = false;
+      for (var j = 0; j < ids.length; j++)
+        if (this.subscriptions[stream][i].id == ids[j]) {
+          this.subscriptions[stream].slice(i, 1);
+          hasRemoved = true;
+          break ;
+        }
+      if (!hasRemoved) i += 1;
+    }
+  }
 };
 
 EventStore.prototype.link = function (categoryName, identityId, mapping, options) {
