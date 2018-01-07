@@ -51,6 +51,7 @@ EventStore.prototype.$input = function (state, payload) {
     state.streams[streamId].push(event);
     state.dispatch('$all', event);
     state.dispatch(streamId, event);
+    if (eventNumber > 0 && eventNumber % 1000 == 0) state.dispatch('$gc', event);
     if (payload.callback) payload.callback(null, { eventNumber: eventNumber });
     return state;
   } else {
@@ -105,6 +106,20 @@ EventStore.prototype.subscribeCategory = function (categoryName, mapping, option
   return this.subscribe('$all', mapping, options, onSubscribed);
 };
 
+EventStore.prototype.onGC = function (categoryName, predicate) {
+  var options = {};
+  options.filter = function (event) { return event.streamId.indexOf(categoryName + '-') == 0; };
+  var _this = this;
+  return this.subscribe('$gc', function (state, event) {
+    var stream = _this.streams[event.streamId];
+    var state = {};
+    for (var i = stream.length - 1; i >= 0; i -= 1) {
+      if (stream[i] == null) continue ;
+      if (predicate(state, stream[i])) stream[i] = void 0;
+    }
+  }, options);
+};
+
 EventStore.prototype.releaseSubscriptions = function (streamId) {
   var subscriptions = this.subscriptions[streamId];
   if (subscriptions == null) return ;
@@ -120,7 +135,7 @@ EventStore.prototype.link = function (categoryName, identityId, mapping, options
 
 EventStore.prototype.readForwardFrom = function (streamId, eventNumber, mapping, options, callback) {
   var stream = this.streams[streamId];
-  if (stream == null) return callback();
+  if (stream == null) return typeof callback == 'function' ? callback() : null;
   if (options == null) options = {};
   if (options.prefix == null) options.prefix = '';
   var $init = 'state' in options ? function () { return options.state; }

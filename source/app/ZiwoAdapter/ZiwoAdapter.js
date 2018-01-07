@@ -1,8 +1,9 @@
 var ZiwoAdapter = function ZiwoTab(window) {
-  this.window = window;
-  this.verto = null;
+  this.window       = window;
+  this.rpcClient    = null;
+  this.credentials  = null;
   this.api_hostname = window.location.hostname.replace('.aswat.co', '-api.aswat.co');
-  this.api_origin = '//' + this.api_hostname;
+  this.api_origin   = '//' + this.api_hostname;
   this.initiate();
   if (this.isLogged())
     this.publish('LoggedTabAppend', { auth: this.getAuthToken() });
@@ -42,50 +43,70 @@ ZiwoAdapter.prototype.getAgentCredentials = function () {
   });
 }
 
-ZiwoAdapter.prototype.connectVerto = function (credentials) {
+ZiwoAdapter.prototype.ConnectPbx = function (credentials) {
   var _this = this;
-  //$.verto.init({}, function () {
   var options = {};
-  options.login = 'agent-' + credentials.login + '@' + _this.api_hostname;
-  options.passwd = CryptoJS.MD5([credentials.login, credentials.password].join('')).toString();
   options.socketUrl = 'wss:' + _this.api_origin + ':8082';
-  options.deviceParams = { useMic: false, useSpeak: false };
-  options.iceServers = true;
-  var callbacks = {};
-  callbacks.onWSLogin = function (verto, success) { debugger; console.log('onWSLogin', arguments); }
-  callbacks.onWSClose = function (verto, success) { debugger; console.log('onWSClose', arguments); }
-  callbacks.onDialogState = function () { debugger; console.log('onWSDialogState', arguments); }
-  var handle = new jQuery.verto(options, callbacks);
-  var payload = {};
-  handle.rpcClient.options.onmessage = function (event) {
+  options.onmessage = function (event) {
     var data = JSON.parse(event.data);
     var method = data.method;
     var payload = data.params;
-    _this.vertoHandleCommand(method, payload);
+    _this.PbxHandleCommand(method, payload);
   };
-  payload.sessid = handle.rpcClient.options.sessid;
-  payload.login = options.login;
-  payload.passwd = options.passwd;
-  payload.loginParams = {};
+  options.onopen = function (event) {
+    _this.publish('PbxWsConnected', { url: event.currentTarget.url });
+  };
+  options.onclose = function () {
+    _this.publish('PbxWsDisconnected', {});
+  };
+  var handle = new $.JsonRpcClient(options);
+  var payload    = {};
+  payload.login  = 'agent-' + credentials.login + '@' + _this.api_hostname;
+  payload.passwd = CryptoJS.MD5([credentials.login, credentials.password].join('')).toString();
+  payload.loginParams   = {};
   payload.userVariables = {};
-  handle.rpcClient.call('login', payload, function () {
-    _this.verto = handle;
-    _this.publish('VertoConnected');
+  handle.call('login', payload, function (event) {
+    _this.rpcClient = handle;
+    _this.publish('PbxWsLoggedIn', { sessid: event.sessid });
   }, function () {
-    _this.publish('VertoConnectionFailed');
+    console.log(event);
+    _this.publish('PbxWsConnectionFailed');
   });
 };
 
-ZiwoAdapter.prototype.vertoHandleCommand = function (method, data) {
+ZiwoAdapter.prototype.PbxHandleCommand = function (method, data) {
   switch (method) {
   case 'verto.invite':
-    this.publish('CallIncame', { id: data.callID, caller: data.caller_id_number });
+    this.publish('PbxWsCallIncame', { id: data.callID, caller: data.caller_id_number });
     break ;
   case 'verto.bye':
-    this.publish('CallEnded', { id: data.callID });
+    this.publish('PbxWsCallEnded', { id: data.callID });
+    break ;
+  default:
+    this.publish('PbxWsUnhandledEvent', { method: method, data: data });
     break ;
   }
 };
+
+ZiwoAdapter.prototype.Dial = function (number) {
+  var dialler = document.querySelector('.dialler-head input');
+  dialler.value = number;
+  var event = document.createEvent('HTMLEvents');
+  event.initEvent('change', false, true);
+  dialler.dispatchEvent(event);
+  document.querySelector('.dialler-bottom button').click();
+};
+
+ZiwoAdapter.prototype.PickUp = function (number) {
+  document.querySelector('.dialler-ringing-state-button.answer button').click()
+};
+
+ZiwoAdapter.prototype.HangUp = function (number) {
+  Array.prototype.slice.call(document.querySelectorAll('.dialler-bottom-button button'))
+    .filter(function (n) { return n.textContent == 'call_end'; })[0]
+    .click();
+};
+
 
 /**********************************/
 
@@ -94,7 +115,25 @@ ZiwoAdapter.prototype.OnLoggedTabAppend = function (event) {
 };
 
 ZiwoAdapter.prototype.OnAgentCredentialsFetched = function (event) {
-  this.connectVerto(event.data);
+  this.credentials = event.data;
+  this.ConnectPbx(event.data);
+};
+
+ZiwoAdapter.prototype.OnPbxWsLoggedIn = function (event) {
+  this.rpcClient.options.sessid = event.data.sessid;
+  var _this = this;
+  this.rpcClient.heartbeat = setInterval(function () {
+    _this.rpcClient.expired = true;
+    _this.rpcClient._wsSocket.close();
+  }, 3600000);
+};
+
+ZiwoAdapter.prototype.OnPbxWsDisconnected = function (event) {
+  var _this = this;
+  if (this.rpcClient && this.rpcClient.heartbeat) clearInterval(this.rpcClient.heartbeat);
+  var delay = _this.rpcClient.expired ? 1 : 5000;
+  _this.rpcClient.expired = false;
+  setTimeout(function () { _this.ConnectPbx(_this.credentials); }, delay);
 };
 
 /**********************************/
@@ -119,9 +158,12 @@ ZiwoAdapter.prototype.send = function (type, event, callback) {
   });
 };
 
-ZiwoAdapter.prototype.receive = function () {
-  debugger;
-};
-
 var adapter = new ZiwoAdapter(window);
+
+chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+  return adapter[request.method].apply(adapter, request.params.concat(function () {
+    if (request.callbackId == null) return ;
+    adapter.publish('Response', { id: request.callbackId, data: Array.prototype.slice.call(arguments) });
+  }));
+});
 

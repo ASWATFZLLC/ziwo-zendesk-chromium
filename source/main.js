@@ -1,4 +1,12 @@
 var es = new EventStore();
+
+es.onGC('ZiwoTab', function (state, event) {
+  if (state[event.eventType] == null) state[event.eventType] = 1;
+  else state[event.eventType] += 1;
+  if (state[event.eventType] > 100) return true;
+  return false;
+});
+
 var modules = {};
 var tabsCategoryNames = {};
 
