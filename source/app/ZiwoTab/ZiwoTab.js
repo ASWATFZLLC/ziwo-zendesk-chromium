@@ -9,6 +9,7 @@ var ZiwoTab = function ZiwoTab(es, id) {
 };
 
 ZiwoTab.prototype.destroy = function () {
+  this._es.deleteHard('ZiwoTab-' + this.id);
   this._es.unsubscribe(this._subs);
 };
 
@@ -30,10 +31,5 @@ ZiwoTab.prototype.OnLoggedTabAppend = function (state, event) {
 
 ZiwoTab.prototype.OnAgentCredentialsFetched = function (state, event) {
   state.agent = event.data;
-  return state;
-};
-
-ZiwoTab.prototype.OnTabClosed = function (state, event) {
-  state._es.deleteHard(event.streamId);
   return state;
 };

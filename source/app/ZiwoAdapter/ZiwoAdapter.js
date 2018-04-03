@@ -36,23 +36,33 @@ ZiwoAdapter.prototype.request = function (method, path, data, callback) {
 ZiwoAdapter.prototype.PbxHandleCommand = function (method, data) {
   switch (method) {
   case 'verto.invite':
-    this.lastCallerId = data.caller_id_number;
-    if (data.caller_id_number == null || data.caller_id_number.length <= 4) break ;
-    this.publish('PbxWsCallIncame', { caller: data.caller_id_number });
+    var callerId = data.caller_id_number;
+    if (callerId == null || callerId.length <= 4) break ;
+    this.PbxCommandVertoInvite(callerId);
     break ;
   case 'verto.bye':
-    var origin = this.api_hostname;
-    var caller = this.lastCallerId;
     var callId = data.callID || data.dialogParams.callID;
+    var caller = this.lastCallerId;
     if (data.cause == 'ORIGINATOR_CANCEL') break ;
     if (caller == null || caller.length <= 4) break ;
-    this.publish('PbxWsCallEnded', { origin: origin, caller: caller, callId: callId });
+    this.PbxCommandVertoBye(callId);
     break ;
   default:
     this.publish('PbxWsUnhandledEvent', { method: method, data: data });
     break ;
   }
 };
+
+ZiwoAdapter.prototype.PbxCommandVertoInvite = debounce(function (callerId) {
+  this.lastCallerId = callerId;
+  this.publish('PbxWsCallIncame', { caller: callerId });
+}, 1000);
+
+ZiwoAdapter.prototype.PbxCommandVertoBye = debounce(function (callId) {
+  var origin = this.api_hostname;
+  var caller = this.lastCallerId;
+  this.publish('PbxWsCallEnded', { origin: origin, caller: caller, callId: callId });
+}, 1000);
 
 ZiwoAdapter.prototype.Dial = function (number) {
   var dialler = document.querySelector('.dialler-head input');
@@ -114,10 +124,11 @@ ZiwoAdapter.prototype.OnLoggedTabAppend = function (event) {
     ]
   , mime);
   var _this = this;
-  var url = window.URL.createObjectURL(blob);
+  var url = this.window.URL.createObjectURL(blob);
   var script = document.createElement('script');
   script.id = 'ChromeExtensionZiwoBridge';
   script.addEventListener('message', function (domEvent) {
+    domEvent.stopPropagation();
     var event = JSON.parse(domEvent.detail);
     if (event.method && event.payload) {
       console.log('SEND', event.method, event.payload);
@@ -131,10 +142,14 @@ ZiwoAdapter.prototype.OnLoggedTabAppend = function (event) {
     window.document.body.appendChild(script);
     script.src = url;
   }, 10000);
+  this.window.addEventListener('beforeunload', function () {
+    _this.publish('TabLeaved');
+  });
 };
 
 ZiwoAdapter.prototype.OnPbxWsCallEnded = function (event) {
   var _this = this;
+  var now = Date.now();
   setTimeout(function () {
     _this.request('get', '/agents/channels/calls?fetchStart=0&fetchStop=6', function (err, history) {
       if (err) return console.error(err);
@@ -142,9 +157,12 @@ ZiwoAdapter.prototype.OnPbxWsCallEnded = function (event) {
         if (history.content[i].recordingFile == null) continue ;
         if (history.content[i].hangupCause != 'NORMAL_CLEARING') break ;
         if (event.data.caller != history.content[i].callerIDNumber) break ;
+        var endTime = new Date(history.content[0].endDateTime).getTime();
+        if (Math.abs(now - endTime) > 8000) break ;
         var payload = event.data;
         payload.fileId = history.content[i].recordingFile;
         _this.publish('PhoneCallRecorded', payload);
+        return ;
       }
     });
   }, 1000);
@@ -181,3 +199,19 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
   }));
 });
 
+/*******************************************/
+
+function debounce(func, wait, immediate) {
+  var timeout;
+  return function() {
+    var context = this, args = arguments;
+    var later = function() {
+      timeout = null;
+      if (!immediate) func.apply(context, args);
+    };
+    var callNow = immediate && !timeout;
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+    if (callNow) func.apply(context, args);
+  };
+}

@@ -42,6 +42,21 @@ ZendeskAdapter.prototype.searchUserByPhoneNumber = function (identity, callback)
   return this.request('get', path, callback);
 };
 
+ZendeskAdapter.prototype.list24hOpenedUserTickets = function (userId, callback) {
+  var date = new Date();
+  date.setDate(date.getDate() - 1);
+  date = encodeURIComponent(date.toISOString());
+  var query = [ 'type:ticket', 'status:new', 'status:open', 'status:pending'
+              , 'created>' + date, 'requester:' + userId
+              ];
+  var path = '/search.json?query=' + query.join('%20');
+  var search = [];
+  return this.request('get', path, function (err, result) {
+    if (err) return callback(err);
+    return callback(null, result.results);
+  });
+};
+
 ZendeskAdapter.prototype.createUser = function (user, callback) {
   return this.request('post', '/users', { user: user }, callback);
 };
@@ -58,13 +73,27 @@ ZendeskAdapter.prototype.createTicket = function (ticket, callback) {
   return this.request('post', '/tickets', { ticket: ticket }, callback);
 };
 
+ZendeskAdapter.prototype.createTicketUpdate = function (ticket, id, callback) {
+  return this.request('put', '/tickets/' + id, { ticket: ticket }, callback);
+};
+
 ZendeskAdapter.prototype.addPhoneCallRecord = function (customerId, ziwoOrigin, callId, callback) {
-  var htmlBody = ['ziwo-phone-call-record', ziwoOrigin, callId].join(':');
-  var ticket = { status: 'solved', tags: ['ziwo-call-record'], subject: 'Ziwo phone call record' };
-  ticket.submitter_id = this.agentId || customerId;
-  ticket.requester_id = customerId;
-  ticket.comment = { html_body: htmlBody, 'public': false, author_id: this.agentId || customerId };
-  return this.createTicket(ticket, callback);
+  var _this = this;
+  return this.list24hOpenedUserTickets(customerId, function (err, tickets) {
+    if (err) return callback(err);
+    var htmlBody = ['ziwo-phone-call-record', ziwoOrigin, callId].join(':');
+    var ticket = { status: 'open', tags: ['ziwo-call-record'], subject: 'Ziwo phone call record' };
+    ticket.submitter_id = _this.agentId || customerId;
+    ticket.requester_id = customerId;
+    ticket.comment = { html_body: htmlBody, 'public': false, author_id: _this.agentId || customerId };
+    if (tickets.length == 0) {
+      return _this.createTicket(ticket, callback);
+    } else {
+      for (var i = 0; i < tickets.length; i++)
+        _this.createTicketUpdate(ticket, tickets[i].id, function () {});
+      return callback();
+    }
+  });
 };
 
 ZendeskAdapter.prototype.setAsPrimary = function self() {
@@ -142,7 +171,7 @@ var PhoneNumber = function (number) {
   var getIndicatif = /^(1(?:2(?:4[26]|6[48]|84)|34[05]|4(?:41|73)|6(?:49|64|7[01]|84)|7(?:21|58|67|8[47])|8(?:[024]9|6[89]|76)|939)?|2(?:[07]|1[1-368]|[2-46]\d|5[0-8]|9[017-9])|3(?:[0-469]|[57]\d|8[0-35-79])|4(?:[013-9]|2[013])|5(?:[09]\d|[1-8])|6(?:[0-6]|7[02-9]|8[0-35-9]|9[0-2])|7|8(?:00|[1246]|5[02356]|8[016])|9(?:[0-58]|6[0-8]|7[0-7]|9[2-68]))/;
   var indicatif = getIndicatif.exec(number);
   this.indicatif = indicatif ? indicatif[1] : '';
-  this.number = number.substr(indicatif.length);
+  this.number = number.substr(this.indicatif.length);
 }
 PhoneNumber.prototype.toString = function () {
   return this.indicatif + this.number;

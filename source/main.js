@@ -1,11 +1,32 @@
 var es = new EventStore();
 
-es.onGC('ZiwoTab', function (state, event) {
+es.onStreamGC('ZiwoTab', function (state, event) {
   if (state[event.eventType] == null) state[event.eventType] = 1;
   else state[event.eventType] += 1;
   if (state[event.eventType] > 100) return true;
   return false;
 });
+
+setInterval(function () {
+  var subs = es.subscriptions.$all;
+  var toTest = [];
+  for (var i = 0; i < subs; i++) {
+    var name = subs[i].mapping.constructor.name;
+    if (name != 'ZiwoTab' && name != 'ZendeskTab') continue ;
+    toTest.push(subs[i]);
+  }
+  return (function loop(list, toRemove) {
+    var subscription = list.shift();
+    if (subscription == null) {
+      return es.unsubscribe(toRemove);
+    } else {
+      return chrome.tabs.get(subscription.mapping.id, function (tab) {
+        if (tab == null) toRemove.push(subscription.id);
+        return loop(list, toRemove);
+      });
+    }
+  })(toTest, []);
+}, 60000);
 
 var modules = {};
 var tabsCategoryNames = {};
@@ -32,6 +53,9 @@ chrome.runtime.onMessage.addListener(function onRequest(request, sender, sendRes
     var options = event.options || {};
     var data = event.data;
     return es.publish(streamId, eventType, data, options, callback);
+  default:
+    console.log('NOT HANDLED', request);
+    return ;
   }
 });
 
@@ -50,4 +74,3 @@ chrome.tabs.onReplaced.addListener(function (id, info) {
   var streamId = categoryName + '-' + id;
   return es.publish(streamId, 'TabClosed');
 });
-

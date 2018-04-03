@@ -4,11 +4,13 @@ var ZendeskTab = function ZendeskTab(es, id) {
   this._waitFor  = new CallbackHandler(60000);
   this._subs = [];
   this.isPrimary = false;
+  this.lastCreatedUser = null;
   this._subs.push(es.link('ZendeskTab', this.id, this, { prefix: 'On' }));
   this._subs.push(es.subscribeCategory('ZiwoTab', this, { prefix: 'OnZiwo', state: this }));
 };
 
 ZendeskTab.prototype.destroy = function () {
+  this._es.deleteHard('ZendeskTab-' + this.id);
   this._es.unsubscribe(this._subs);
 };
 
@@ -35,13 +37,21 @@ ZendeskTab.prototype.OnZiwoPbxWsCallIncame = function (state, event) {
     if (err) return console.error(err);
     if (search.count == 0) {
       var user = { name: 'Ziwo autocreated end-user', phone: event.data.caller, role: 'end-user' };
-      state.trigger('createUser', [user], function (err, result) {
-        if (err) return console.error(err);
-        state.trigger('displayUser', [result.user.id]);
-      });
+      state._es.publish('ZendeskTab-' + state.id, 'UserCreated', user);
     } else {
       state.trigger('displayUser', [search.results[0].id]);
     }
+  });
+  return state;
+};
+
+ZendeskTab.prototype.OnUserCreated = function (state, event) {
+  var user = event.data;
+  state.trigger('createUser', [user], function (err, result) {
+    if (err) return console.error(err);
+    user.id = result.user.id;
+    state.lastCreatedUser = user;
+    state.trigger('displayUser', [result.user.id]);
   });
   return state;
 };
@@ -51,19 +61,22 @@ ZendeskTab.prototype.OnZiwoPhoneCallRecorded = function (state, event) {
   var number = new PhoneNumber(event.data.caller).number;
   state.trigger('searchUserByPhoneNumber', [number], function (err, search) {
     if (err) return console.error(err);
-    if (search.count == 0) return console.error('Unable to register call log on '+number);
-    state.trigger('addPhoneCallRecord', [search.results[0].id, event.data.origin, event.data.fileId]);
+    if (search.count == 0) {
+      if (state.lastCreatedUser != null && event.data.caller == state.lastCreatedUser.phone) {
+        var user_id = state.lastCreatedUser.id;
+        state.trigger('addPhoneCallRecord', [user_id, event.data.origin, event.data.fileId]);
+      } else {
+        console.error('Unable to register call record for ' + event.data.caller);
+      }
+    } else {
+      state.trigger('addPhoneCallRecord', [search.results[0].id, event.data.origin, event.data.fileId]);
+    }
   });
   return state;
 };
 
 ZendeskTab.prototype.OnRequestPrimary = function (state, event) {
   state.isPrimary = true;
-  return state;
-};
-
-ZendeskTab.prototype.OnTabClosed = function (state, event) {
-  state._es.deleteHard(event.streamId);
   return state;
 };
 
@@ -81,6 +94,7 @@ var PhoneNumber = function (number) {
   this.indicatif = indicatif ? indicatif[1] : '';
   this.number = number.substr(indicatif.length);
 }
+
 PhoneNumber.prototype.toString = function () {
   return this.indicatif + this.number;
 };

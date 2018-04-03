@@ -1,1 +1,0 @@
-jquery.verto-master.js

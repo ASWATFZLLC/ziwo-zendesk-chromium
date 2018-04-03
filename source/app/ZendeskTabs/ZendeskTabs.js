@@ -6,6 +6,16 @@ var ZendeskTabs = function (es) {
   this._subs.push(es.subscribeCategory('ZendeskTab', this, { state: this, prefix: 'On' }));
 };
 
+/*****************************************/
+
+ZendeskTabs.prototype.guessNewPrimary = function () {
+  for (var nextId in this.tabs) break ;
+  if (nextId) this.tabs[nextId].setAsPrimary();
+  else this.primaryId = null;
+};
+
+/*****************************************/
+
 ZendeskTabs.prototype.OnLoggedTabAppend = function (state, event) {
   state.tabs[event.identityId] = new ZendeskTab(state._es, event.identityId);
   if (state.primaryId == null) {
@@ -30,11 +40,21 @@ ZendeskTabs.prototype.OnRequestPrimary = function (state, event) {
 };
 
 ZendeskTabs.prototype.OnTabClosed = function (state, event) {
-  state.tabs[event.identityId].destroy();
-  delete state.tabs[event.identityId];
-  if (event.identityId == state.primaryId) {
-    for (var nextId in state.tabs) break ;
-    state.tabs[nextId].setAsPrimary();
+  if (state.tabs[event.identityId]) {
+    state.tabs[event.identityId].destroy();
+    delete state.tabs[event.identityId];
   }
+  if (event.identityId == state.primaryId)
+    state.guessNewPrimary();
+  return state;
+};
+
+ZiwoTabs.prototype.OnTabLeaved = function (state, event) {
+  if (state.tabs[event.identityId]) {
+    state.tabs[event.identityId].destroy();
+    delete state.tabs[event.identityId];
+  }
+  if (event.identityId == state.primaryId)
+    state.guessNewPrimary();
   return state;
 };

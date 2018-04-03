@@ -106,7 +106,7 @@ EventStore.prototype.subscribeCategory = function (categoryName, mapping, option
   return this.subscribe('$all', mapping, options, onSubscribed);
 };
 
-EventStore.prototype.onGC = function (categoryName, predicate) {
+EventStore.prototype.onStreamGC = function (categoryName, predicate) {
   var options = {};
   options.filter = function (event) { return event.streamId.indexOf(categoryName + '-') == 0; };
   var _this = this;
@@ -122,19 +122,24 @@ EventStore.prototype.onGC = function (categoryName, predicate) {
 
 EventStore.prototype.unsubscribe = function (ids) {
   if (typeof ids == 'string') ids = [ids];
+  var toDelete = [];
   for (var stream in this.subscriptions) {
     var newStream = [];
     for (var i = 0; i < this.subscriptions[stream].length; ) {
       var hasRemoved = false;
       for (var j = 0; j < ids.length; j++)
         if (this.subscriptions[stream][i].id == ids[j]) {
-          this.subscriptions[stream].slice(i, 1);
+          this.subscriptions[stream].splice(i, 1);
           hasRemoved = true;
           break ;
         }
       if (!hasRemoved) i += 1;
     }
+    if (this.subscriptions[stream].length == 0)
+      toDelete.push(stream);
   }
+  for (var i = 0; i < toDelete.length; i++)
+    delete this.subscriptions[toDelete[i]];
 };
 
 EventStore.prototype.link = function (categoryName, identityId, mapping, options) {
