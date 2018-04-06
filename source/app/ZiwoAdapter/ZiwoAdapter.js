@@ -90,36 +90,38 @@ ZiwoAdapter.prototype.HangUp = function (number) {
 ZiwoAdapter.prototype.OnLoggedTabAppend = function (event) {
   var mime = { type: 'application/javascript' }
   var blob = new Blob
-  ( [ '(' + function self() {
+  ( [ '(' + function proxifyVertoIngoingMessageHook() {
         if (typeof $ == 'undefined' || typeof $.verto == 'undefined' || $.verto.saved.length < 1)
-          return setTimeout(self, 1000);
-        var fn = $.verto.saved[0].rpcClient.options.onmessage;
-        if (fn.bridged) return setTimeout(self, 1000);
-        $.verto.saved[0].rpcClient.options.onmessage = function (event) {
+          return setTimeout(proxifyVertoIngoingMessageHook, 1000);
+        var last = $.verto.saved.length - 1;
+        var fn = $.verto.saved[last].rpcClient.options.onmessage;
+        if (fn.bridged) return setTimeout(proxifyVertoIngoingMessageHook, 1000);
+        $.verto.saved[last].rpcClient.options.onmessage = function (event) {
           try {
             var domEv = new CustomEvent('message', { detail: JSON.stringify(event) });
             document.getElementById('ChromeExtensionZiwoBridge').dispatchEvent(domEv);
           } catch (e) {}
           return fn.apply(this, arguments);
         };
-        $.verto.saved[0].rpcClient.options.onmessage.bridged = true;
-        return setTimeout(self, 1000);
+        $.verto.saved[last].rpcClient.options.onmessage.bridged = true;
+        return setTimeout(proxifyVertoIngoingMessageHook, 1000);
       } + ')();'
-    , '(' + function self() {
+    , '(' + function proxifyVertoOutgoingMessageHook() {
         if (typeof $ == 'undefined' || typeof $.verto == 'undefined' || $.verto.saved.length < 1)
-          return setTimeout(self, 1000);
-        var fn = $.verto.saved[0].rpcClient.call;
-        if (fn.bridged) return setTimeout(self, 1000);
-          $.verto.saved[0].rpcClient.call = function (method, payload) {
+          return setTimeout(proxifyVertoOutgoingMessageHook, 1000);
+        var last = $.verto.saved.length - 1;
+        var fn = $.verto.saved[last].rpcClient.call;
+        if (fn.bridged) return setTimeout(proxifyVertoOutgoingMessageHook, 1000);
+        $.verto.saved[last].rpcClient.call = function (method, payload) {
           try {
             var event = { method: method, payload: payload };
             var domEv = new CustomEvent('message', { detail: JSON.stringify(event) });
             document.getElementById('ChromeExtensionZiwoBridge').dispatchEvent(domEv);
           } catch (e) {}
           return fn.apply(this, arguments);
-        };
-        $.verto.saved[0].rpcClient.call.bridged = true;
-        return setTimeout(self, 1000);
+        }
+        $.verto.saved[last].rpcClient.call.bridged = true;
+        return setTimeout(proxifyVertoOutgoingMessageHook, 1000);
       } + ')();'
     ]
   , mime);
@@ -136,6 +138,8 @@ ZiwoAdapter.prototype.OnLoggedTabAppend = function (event) {
     } else if (event.eventData) {
       console.log('RECEIVE', event.eventData.method, event.eventData.params);
       _this.PbxHandleCommand(event.eventData.method, event.eventData.params);
+    } else {
+      console.log('OTHER', event);
     }
   }, true);
   setTimeout(function () {
