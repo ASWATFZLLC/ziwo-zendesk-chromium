@@ -36,16 +36,18 @@ ZiwoAdapter.prototype.request = function (method, path, data, callback) {
 ZiwoAdapter.prototype.PbxHandleCommand = function (method, data) {
   switch (method) {
   case 'verto.invite':
-    var callerId = data.caller_id_number;
+    if (data.dialogParams == null) data.dialogParams = {};
+    var callerId = data.caller_id_number || data.dialogParams.destination_number;
     if (callerId == null || callerId.length <= 4) break ;
     this.PbxCommandVertoInvite(callerId);
     break ;
   case 'verto.bye':
+    if (data.dialogParams == null) data.dialogParams = {};
     var callId = data.callID || data.dialogParams.callID;
-    var caller = this.lastCallerId;
+    var callerId = this.lastCallerId;
     if (data.cause == 'ORIGINATOR_CANCEL') break ;
-    if (caller == null || caller.length <= 4) break ;
-    this.PbxCommandVertoBye(callId);
+    if (callerId == null || callerId.length <= 4) break ;
+    this.PbxCommandVertoBye(callId, callerId);
     break ;
   default:
     this.publish('PbxWsUnhandledEvent', { method: method, data: data });
@@ -55,13 +57,12 @@ ZiwoAdapter.prototype.PbxHandleCommand = function (method, data) {
 
 ZiwoAdapter.prototype.PbxCommandVertoInvite = debounce(function (callerId) {
   this.lastCallerId = callerId;
-  this.publish('PbxWsCallIncame', { caller: callerId });
+  this.publish('PbxWsCallIncame', { callerId: callerId });
 }, 1000);
 
-ZiwoAdapter.prototype.PbxCommandVertoBye = debounce(function (callId) {
+ZiwoAdapter.prototype.PbxCommandVertoBye = debounce(function (callId, callerId) {
   var origin = this.api_hostname;
-  var caller = this.lastCallerId;
-  this.publish('PbxWsCallEnded', { origin: origin, caller: caller, callId: callId });
+  this.publish('PbxWsCallEnded', { origin: origin, callId: callId, callerId: callerId });
 }, 1000);
 
 ZiwoAdapter.prototype.Dial = function (number) {
@@ -157,14 +158,16 @@ ZiwoAdapter.prototype.OnPbxWsCallEnded = function (event) {
   setTimeout(function () {
     _this.request('get', '/agents/channels/calls?fetchStart=0&fetchStop=6', function (err, history) {
       if (err) return console.error(err);
+      var payload = event.data;
+      var callerId = payload.callerId;
       for (var i = 0; i < history.content.length; i++) {
-        if (history.content[i].recordingFile == null) continue ;
-        if (history.content[i].hangupCause != 'NORMAL_CLEARING') break ;
-        if (event.data.caller != history.content[i].callerIDNumber) break ;
-        var endTime = new Date(history.content[0].endDateTime).getTime();
+        var entry = history.content[i];
+        if (entry.recordingFile == null) continue ;
+        if (entry.hangupCause != 'NORMAL_CLEARING') break ;
+        if (callerId != entry.callerIDNumber && callerId != entry.didCalled) break ;
+        var endTime = new Date(entry.endDateTime).getTime();
         if (Math.abs(now - endTime) > 8000) break ;
-        var payload = event.data;
-        payload.fileId = history.content[i].recordingFile;
+        payload.fileId = entry.recordingFile;
         _this.publish('PhoneCallRecorded', payload);
         return ;
       }

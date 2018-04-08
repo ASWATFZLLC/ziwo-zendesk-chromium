@@ -32,10 +32,10 @@
   , "64": "ui/images/ds_icon_64.png"
   , "128": "ui/images/ds_icon_128.png"
   }
-, "manifest_version": 9
+, "manifest_version": 10
 , "name": "Ziwo Zendesk Bridge"
 , "content_security_policy": "object-src 'self'; script-src 'self' 'unsafe-eval'; connect-src 'self' ws://*.aswat.co https://*.aswat.co https://*.zendesk.com"
 , "web_accessible_resources": ["ui/images/*", "app/*", "vendor/*"]
 , "permissions": [ "tabs", "webRequest", "*://*.aswat.co/*", "*://*.zendesk.com/*" ]
-, "version": "0.0.9"
+, "version": "0.0.10"
 }

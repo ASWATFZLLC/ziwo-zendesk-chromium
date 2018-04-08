@@ -32,11 +32,11 @@ ZendeskTab.prototype.unsetAsPrimary = function () {
 
 ZendeskTab.prototype.OnZiwoPbxWsCallIncame = function (state, event) {
   if (!state.isPrimary) return state;
-  var number = new PhoneNumber(event.data.caller).number;
+  var number = new PhoneNumber(event.data.callerId).number;
   state.trigger('searchUserByPhoneNumber', [number], function (err, search) {
     if (err) return console.error(err);
     if (search.count == 0) {
-      var user = { name: 'Ziwo autocreated end-user', phone: event.data.caller, role: 'end-user' };
+      var user = { name: 'Ziwo autocreated end-user', phone: event.data.callerId, role: 'end-user' };
       state._es.publish('ZendeskTab-' + state.id, 'UserCreated', user);
     } else {
       state.trigger('displayUser', [search.results[0].id]);
@@ -58,15 +58,15 @@ ZendeskTab.prototype.OnUserCreated = function (state, event) {
 
 ZendeskTab.prototype.OnZiwoPhoneCallRecorded = function (state, event) {
   if (!state.isPrimary) return state;
-  var number = new PhoneNumber(event.data.caller).number;
+  var number = new PhoneNumber(event.data.callerId).number;
   state.trigger('searchUserByPhoneNumber', [number], function (err, search) {
     if (err) return console.error(err);
     if (search.count == 0) {
-      if (state.lastCreatedUser != null && event.data.caller == state.lastCreatedUser.phone) {
+      if (state.lastCreatedUser != null && event.data.callerId == state.lastCreatedUser.phone) {
         var user_id = state.lastCreatedUser.id;
         state.trigger('addPhoneCallRecord', [user_id, event.data.origin, event.data.fileId]);
       } else {
-        console.error('Unable to register call record for ' + event.data.caller);
+        console.error('Unable to register call record for ' + event.data.callerId);
       }
     } else {
       state.trigger('addPhoneCallRecord', [search.results[0].id, event.data.origin, event.data.fileId]);
