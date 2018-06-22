@@ -1,31 +1,32 @@
 { "background":
   { "scripts": [ "vendor/event-store/EventStore.js"
-               , "vendor/callback-handler/index.js"
-               , "app/ZiwoTab/index.js"
-               , "app/ZiwoTabs/index.js"
-               , "app/ZendeskTab/index.js"
-               , "app/ZendeskTabs/index.js"
+               , "vendor/callback-handler/CallbackHandler.js"
+               , "app/ZiwoTab/ZiwoTab.js"
+               , "app/ZiwoTabs/ZiwoTabs.js"
+               , "app/ZendeskTab/ZendeskTab.js"
+               , "app/ZendeskTabs/ZendeskTabs.js"
                , "main.js"
                ]
   }
 , "content_scripts":
   [ { "all_frames": true
-    , "js": [ "vendor/jquery/index.js"
-            , "vendor/cryptojs/index.js"
-            , "app/ZiwoAdapter/index.js"
+    , "js": [ "vendor/jquery/jquery-2.1.1.min.js"
+            , "vendor/cryptojs/crypto-js.js"
+            , "app/ZiwoAdapter/ZiwoAdapter.js"
             ]
     , "matches": [ "*://*.aswat.co/*" ]
     , "run_at": "document_end"
     }
   , { "all_frames": true
-    , "js": [ "vendor/jquery/index.js"
-            , "app/ZendeskAdapter/index.js"
+    , "js": [ "vendor/jquery/jquery-2.1.1.min.js"
+            , "app/ZendeskAdapter/ZendeskAdapter.js"
             ]
     , "matches": [ "*://*.zendesk.com/*" ]
     , "run_at": "document_end"
     }
   ]
 , "description": "Bridge between Ziwo and Zendesk"
+, "authors": [{ "email": "chrome-ext.it@apiculteur.io" }]
 , "icons":
   { "16": "ui/images/ds_icon_16.png"
   , "48": "ui/images/ds_icon_48.png"
@@ -33,9 +34,9 @@
   , "128": "ui/images/ds_icon_128.png"
   }
 , "manifest_version": 2
-, "name": "Ziwo Zendesk Bridge"
+, "name": "Ziwo Bridge for Zendesk"
 , "content_security_policy": "object-src 'self'; script-src 'self' 'unsafe-eval'; connect-src 'self' ws://*.aswat.co https://*.aswat.co https://*.zendesk.com"
 , "web_accessible_resources": ["ui/images/*", "app/*", "vendor/*"]
 , "permissions": [ "tabs", "webRequest", "*://*.aswat.co/*", "*://*.zendesk.com/*" ]
-, "version": "0.0.10"
+, "version": "1.0.0"
 }
